@@ -23,6 +23,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   pinoHttp({
     logger,
+    autoLogging: {
+      ignore: (req) => {
+        const path = req.url?.split("?")[0];
+        return path === "/api/debug/status" || path === "/health";
+      },
+    },
   }),
 );
 

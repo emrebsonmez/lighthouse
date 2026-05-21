@@ -9,6 +9,9 @@ import { pollOrg } from "./poll-org.js";
 
 const JOB_NAME = "poll-org";
 
+/** Intervals offered on the public debug page (15 remains valid in DB/cron). */
+export const DEBUG_POLL_INTERVALS = [5, 10, 30, 60] as const;
+
 let boss: PgBoss | null = null;
 const registeredWorkers = new Set<string>();
 

@@ -67,9 +67,23 @@ async function backfillJournalFromExistingSchema(): Promise<void> {
   logger.info({ migration: "0000_initial" }, "migration_backfilled");
 }
 
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  const { rows } = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+    ) AS exists`,
+    [tableName, columnName],
+  );
+  return rows[0]?.exists ?? false;
+}
+
 async function migrationSchemaPresent(id: string): Promise<boolean> {
   if (id === "0000_initial") return tableExists("organizations");
   if (id === "0001_poll_runs") return tableExists("poll_runs");
+  if (id === "0002_stay_date_override") {
+    return columnExists("organizations", "stay_date_override");
+  }
   return true;
 }
 

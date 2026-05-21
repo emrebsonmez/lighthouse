@@ -4,11 +4,10 @@ import {
   alerts,
   compSets,
   organizations,
-  properties,
   rateSnapshots,
 } from "../db/schema.js";
 import { logger } from "../lib/logger.js";
-import { stayWindowInTimezone } from "../lib/dates.js";
+import { getStayWindowForOrg } from "../lib/dates.js";
 import {
   evaluateCompSet,
   priceStr,
@@ -47,20 +46,14 @@ export async function runComparator(orgId: string): Promise<void> {
     .limit(1);
   if (!org) return;
 
+  const { stayDate } = getStayWindowForOrg(org);
+
   const sets = await db
     .select()
     .from(compSets)
     .where(eq(compSets.orgId, orgId));
 
   for (const compSet of sets) {
-    const [home] = await db
-      .select()
-      .from(properties)
-      .where(eq(properties.id, compSet.homePropertyId))
-      .limit(1);
-    if (!home) continue;
-
-    const { stayDate } = stayWindowInTimezone(home.timezone);
     const homeSnap = await latestSnapshot(compSet.homePropertyId, stayDate);
     const compSnap = await latestSnapshot(compSet.competitorPropertyId, stayDate);
 
