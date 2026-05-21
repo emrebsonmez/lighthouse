@@ -185,7 +185,7 @@ open_url() {
 start_dev_with_browser() {
   local base urls
   base="$(app_base_url)"
-  urls="${base}/subscribe.html ${base}/health"
+  urls="${base}/debug.html ${base}/subscribe.html"
 
   info "Starting Lighthouse (Ctrl+C to stop)…"
   npm run dev &

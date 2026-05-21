@@ -25,7 +25,12 @@ Then start the app:
 npm run dev
 ```
 
-Open http://localhost:3000/subscribe.html
+Open the live debugger (no Twilio required to see polls):
+
+- http://localhost:3000/debug.html — site clock, next-check countdown, run history
+- http://localhost:3000/subscribe.html — SMS opt-in
+
+Populate history with `npm run poll` or **Run check now** on the debug page.
 
 `npm run setup -- --skip-seed` skips seeding if you only want the database up first.
 

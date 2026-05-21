@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -26,6 +27,14 @@ export const notificationStatusEnum = pgEnum("notification_status", [
   "pending",
   "sent",
   "failed",
+]);
+export const pollOutcomeEnum = pgEnum("poll_outcome", [
+  "undercut",
+  "ahead",
+  "tied",
+  "stale",
+  "sold_out",
+  "error",
 ]);
 
 export const organizations = pgTable("organizations", {
@@ -140,6 +149,27 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const pollRuns = pgTable(
+  "poll_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    compSetId: uuid("comp_set_id")
+      .notNull()
+      .references(() => compSets.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    stayDate: text("stay_date").notNull(),
+    homeCheapest: text("home_cheapest"),
+    competitorCheapest: text("competitor_cheapest"),
+    outcome: pollOutcomeEnum("outcome"),
+    detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index("poll_runs_org_started").on(t.orgId, t.startedAt)],
+);
+
 export const feedback = pgTable("feedback", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
@@ -155,3 +185,5 @@ export type Organization = typeof organizations.$inferSelect;
 export type Property = typeof properties.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
+export type PollRun = typeof pollRuns.$inferSelect;
+export type PollOutcome = (typeof pollOutcomeEnum.enumValues)[number];
