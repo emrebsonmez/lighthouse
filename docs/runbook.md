@@ -49,6 +49,15 @@ npm run dev
 
 Or follow the manual steps in [README.md](../README.md).
 
+## Live debugger (`/debug.html`)
+
+Public status page for local/staging visibility without SMS:
+
+- `GET /api/debug/status` — clock, next poll countdown, active run, last 50 completed runs
+- `POST /api/debug/poll-now` — trigger one poll in the background
+
+To restrict access later, add a `DEBUG_TOKEN` env check on these routes (not implemented in v1).
+
 ## Webhooks (Twilio Console)
 
 - **Inbound SMS:** `POST {APP_BASE_URL}/webhooks/twilio/sms`

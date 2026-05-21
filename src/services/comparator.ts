@@ -9,15 +9,11 @@ import {
 } from "../db/schema.js";
 import { logger } from "../lib/logger.js";
 import { stayWindowInTimezone } from "../lib/dates.js";
-
-type SnapshotRates = {
-  normalized: { room_name: string; price: number }[];
-};
-
-function minPrice(normalized: { room_name: string; price: number }[]): number | null {
-  if (normalized.length === 0) return null;
-  return Math.min(...normalized.map((r) => r.price));
-}
+import {
+  evaluateCompSet,
+  priceStr,
+  type SnapshotLike,
+} from "./evaluate-comp-set.js";
 
 async function latestSnapshot(propertyId: string, stayDate: string) {
   const rows = await db
@@ -32,6 +28,15 @@ async function latestSnapshot(propertyId: string, stayDate: string) {
     .orderBy(desc(rateSnapshots.checkedAt))
     .limit(1);
   return rows[0] ?? null;
+}
+
+function toSnapshotLike(snap: Awaited<ReturnType<typeof latestSnapshot>>): SnapshotLike | null {
+  if (!snap) return null;
+  return {
+    checkedAt: snap.checkedAt,
+    status: snap.status,
+    rates: snap.rates as SnapshotLike["rates"],
+  };
 }
 
 export async function runComparator(orgId: string): Promise<void> {
@@ -59,35 +64,25 @@ export async function runComparator(orgId: string): Promise<void> {
     const homeSnap = await latestSnapshot(compSet.homePropertyId, stayDate);
     const compSnap = await latestSnapshot(compSet.competitorPropertyId, stayDate);
 
-    const now = Date.now();
-    const maxStaleMs = org.maxStalenessSeconds * 1000;
+    const { outcome, homeMin, compMin } = evaluateCompSet(
+      toSnapshotLike(homeSnap),
+      toSnapshotLike(compSnap),
+      org.maxStalenessSeconds,
+    );
 
-    const isStale = (snap: typeof homeSnap) =>
-      !snap || now - snap.checkedAt.getTime() > maxStaleMs;
-
-    if (isStale(homeSnap) || isStale(compSnap)) {
+    if (outcome === "stale") {
       logger.info({ compSetId: compSet.id, stayDate }, "comparator_skip_stale");
       await clearActiveAlert(compSet, stayDate);
       continue;
     }
 
-    if (homeSnap!.status !== "ok" || compSnap!.status !== "ok") {
+    if (outcome === "sold_out" || homeMin === null || compMin === null) {
       logger.info({ compSetId: compSet.id }, "comparator_skip_sold_out");
       await clearActiveAlert(compSet, stayDate);
       continue;
     }
 
-    const homeRates = homeSnap!.rates as SnapshotRates;
-    const compRates = compSnap!.rates as SnapshotRates;
-    const homeMin = minPrice(homeRates.normalized);
-    const compMin = minPrice(compRates.normalized);
-
-    if (homeMin === null || compMin === null) {
-      await clearActiveAlert(compSet, stayDate);
-      continue;
-    }
-
-    const undercut = compMin < homeMin;
+    const undercut = outcome === "undercut";
 
     const [existing] = await db
       .select()
@@ -102,7 +97,6 @@ export async function runComparator(orgId: string): Promise<void> {
       .limit(1);
 
     if (undercut) {
-      const priceStr = (n: number) => n.toFixed(2);
       if (!existing || !existing.isActive) {
         if (existing) {
           await db
