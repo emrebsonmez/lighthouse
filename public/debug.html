@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lighthouse — Live trace</title>
+    <style>
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #0f1115;
+        --surface: #1a1d23;
+        --border: #3c4043;
+        --text: #e8eaed;
+        --muted: #9aa0a6;
+        --accent: #8ab4f8;
+        --good: #81c995;
+        --bad: #f28b82;
+        --warn: #fdd663;
+        --neutral: #9aa0a6;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 2rem 1.25rem 3rem;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; }
+      header { margin-bottom: 2rem; }
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+        letter-spacing: -0.02em;
+      }
+      .sub { color: var(--muted); font-size: 0.875rem; margin: 0; }
+      .hero {
+        text-align: center;
+        padding: 2rem 1rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        margin-bottom: 1.25rem;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: -40%;
+        background: radial-gradient(circle at 50% 50%, rgba(138, 180, 248, 0.08), transparent 55%);
+        pointer-events: none;
+      }
+      .clock {
+        font-size: 3.5rem;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .tz-label {
+        color: var(--muted);
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+      }
+      .countdown-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 1rem;
+      }
+      .countdown-label {
+        font-size: 0.8rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.35rem;
+      }
+      .countdown-value {
+        font-size: 1.75rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .ring {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        position: relative;
+        flex-shrink: 0;
+      }
+      .ring::after {
+        content: "";
+        position: absolute;
+        inset: 4px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        border-top-color: var(--accent);
+        animation: spin 2s linear infinite;
+      }
+      .ring.idle::after { animation: none; border-top-color: var(--border); opacity: 0.4; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .live-strip {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        background: rgba(138, 180, 248, 0.08);
+        border: 1px solid rgba(138, 180, 248, 0.2);
+      }
+      .live-strip.watching {
+        background: rgba(129, 201, 149, 0.06);
+        border-color: rgba(129, 201, 149, 0.2);
+      }
+      .live-strip.checking {
+        background: rgba(253, 214, 99, 0.08);
+        border-color: rgba(253, 214, 99, 0.25);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--good);
+        flex-shrink: 0;
+      }
+      .checking .dot {
+        background: var(--warn);
+        animation: pulse 1s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.85); }
+      }
+      .shimmer {
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      th {
+        text-align: left;
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+      }
+      td {
+        padding: 0.65rem 0.5rem;
+        border-bottom: 1px solid rgba(60, 64, 67, 0.5);
+        vertical-align: middle;
+      }
+      tr.highlight td {
+        animation: rowFlash 1.2s ease-out;
+      }
+      @keyframes rowFlash {
+        from { background: rgba(138, 180, 248, 0.2); }
+        to { background: transparent; }
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .badge.undercut { background: rgba(242, 139, 130, 0.2); color: var(--bad); }
+      .badge.ahead { background: rgba(129, 201, 149, 0.2); color: var(--good); }
+      .badge.tied { background: rgba(154, 160, 166, 0.2); color: var(--neutral); }
+      .badge.stale, .badge.sold_out { background: rgba(253, 214, 99, 0.15); color: var(--warn); }
+      .badge.error { background: rgba(242, 139, 130, 0.15); color: var(--bad); }
+      .price { font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+      }
+      button, a.btn {
+        appearance: none;
+        border: none;
+        cursor: pointer;
+        font: inherit;
+        padding: 0.65rem 1.1rem;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0f1115;
+      }
+      button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+      a.btn.secondary {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .error-banner {
+        padding: 1rem;
+        background: rgba(242, 139, 130, 0.1);
+        border: 1px solid rgba(242, 139, 130, 0.3);
+        border-radius: 8px;
+        color: var(--bad);
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+      }
+      .meta-row {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Lighthouse</h1>
+        <p class="sub">Live rate trace</p>
+      </header>
+
+      <div id="error" class="error-banner" hidden></div>
+
+      <section class="hero">
+        <div class="clock" id="clock">—:—</div>
+        <div class="tz-label" id="tzLabel">Site time</div>
+      </section>
+
+      <div class="countdown-card">
+        <div>
+          <div class="countdown-label">Next comp check</div>
+          <div class="countdown-value" id="countdown">—</div>
+        </div>
+        <div class="ring idle" id="ring" aria-hidden="true"></div>
+      </div>
+
+      <div class="live-strip watching" id="liveStrip">
+        <span class="dot"></span>
+        <span id="liveText">Connecting…</span>
+      </div>
+
+      <div class="meta-row">
+        <span>Stay date: <strong id="stayDate">—</strong></span>
+        <span id="orgMeta"></span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th id="homeCol">MYC</th>
+            <th id="compCol">Marram</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="4" class="muted">No runs yet — try “Run check now”</td></tr>
+        </tbody>
+      </table>
+
+      <div class="actions">
+        <button type="button" class="primary" id="pollBtn">Run check now</button>
+        <a class="btn secondary" href="/subscribe.html">Subscribe</a>
+      </div>
+    </div>
+
+    <script>
+      const clockEl = document.getElementById("clock");
+      const tzLabelEl = document.getElementById("tzLabel");
+      const countdownEl = document.getElementById("countdown");
+      const ringEl = document.getElementById("ring");
+      const liveStrip = document.getElementById("liveStrip");
+      const liveText = document.getElementById("liveText");
+      const historyBody = document.getElementById("historyBody");
+      const errorEl = document.getElementById("error");
+      const pollBtn = document.getElementById("pollBtn");
+      const stayDateEl = document.getElementById("stayDate");
+      const orgMetaEl = document.getElementById("orgMeta");
+      const homeCol = document.getElementById("homeCol");
+      const compCol = document.getElementById("compCol");
+
+      let state = null;
+      let clockOffsetMs = 0;
+      let orgTimezone = "America/New_York";
+      let lastTopRunId = null;
+      let nextPollAtMs = null;
+
+      function formatClock(date) {
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+          timeZone: orgTimezone,
+        });
+      }
+
+      function tickClock() {
+        const now = new Date(Date.now() + clockOffsetMs);
+        clockEl.textContent = formatClock(now);
+      }
+
+      function formatCountdown(seconds) {
+        if (seconds == null) return "—";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) {
+          return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        }
+        return `${m}:${String(s).padStart(2, "0")}`;
+      }
+
+      function tickCountdown() {
+        if (!nextPollAtMs) {
+          countdownEl.textContent = "—";
+          ringEl.classList.add("idle");
+          return;
+        }
+        const sec = Math.max(0, Math.floor((nextPollAtMs - Date.now()) / 1000));
+        countdownEl.textContent = formatCountdown(sec);
+        ringEl.classList.toggle("idle", sec > 120);
+      }
+
+      function fmtPrice(v) {
+        if (v == null) return "—";
+        return "$" + v;
+      }
+
+      function renderHistory(history) {
+        if (!history || history.length === 0) {
+          historyBody.innerHTML =
+            '<tr><td colspan="4" class="muted">No runs yet — try “Run check now”</td></tr>';
+          return;
+        }
+
+        const topId = history[0]?.id;
+        const highlight = topId && topId !== lastTopRunId;
+        if (highlight) lastTopRunId = topId;
+
+        historyBody.innerHTML = history
+          .map((row, i) => {
+            const badgeClass = row.outcome || "error";
+            return `<tr class="${highlight && i === 0 ? "highlight" : ""}">
+              <td>${row.startedAtLocal}</td>
+              <td class="price">${fmtPrice(row.homeCheapest)}</td>
+              <td class="price">${fmtPrice(row.competitorCheapest)}</td>
+              <td><span class="badge ${badgeClass}" title="${row.outcomeSubtitle || ""}">${row.outcomeLabel}</span></td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      function applyStatus(data) {
+        state = data;
+        errorEl.hidden = true;
+
+        orgTimezone = data.org.timezone;
+        clockOffsetMs = new Date(data.serverTime).getTime() - Date.now();
+        tzLabelEl.textContent = `${data.org.name} · ${data.org.timezone.replace(/_/g, " ")}`;
+        stayDateEl.textContent = data.stayDate;
+        orgMetaEl.textContent = `Every ${data.org.pollEveryMinutes} min`;
+        homeCol.textContent = data.properties.home;
+        compCol.textContent = data.properties.competitor;
+
+        nextPollAtMs = data.nextPollAt ? new Date(data.nextPollAt).getTime() : null;
+        tickCountdown();
+
+        if (data.activeRun) {
+          liveStrip.className = "live-strip checking shimmer";
+          liveText.textContent = "Checking rates…";
+          pollBtn.disabled = true;
+        } else {
+          liveStrip.className = "live-strip watching";
+          liveText.textContent = "Watching · live trace";
+          pollBtn.disabled = false;
+        }
+
+        renderHistory(data.history);
+      }
+
+      async function fetchStatus() {
+        try {
+          const res = await fetch("/api/debug/status");
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.hidden = false;
+            errorEl.textContent = data.message || "Unable to load status";
+            liveText.textContent = "Offline";
+            return;
+          }
+          applyStatus(data);
+        } catch (e) {
+          errorEl.hidden = false;
+          errorEl.textContent = "Cannot reach server. Is npm run dev running?";
+          liveText.textContent = "Offline";
+        }
+      }
+
+      pollBtn.addEventListener("click", async () => {
+        pollBtn.disabled = true;
+        try {
+          const res = await fetch("/api/debug/poll-now", { method: "POST" });
+          const data = await res.json();
+          if (!data.started) {
+            liveText.textContent = "Poll already running…";
+          }
+          await fetchStatus();
+        } catch {
+          errorEl.hidden = false;
+          errorEl.textContent = "Failed to start poll";
+        }
+      });
+
+      setInterval(tickClock, 1000);
+      setInterval(tickCountdown, 1000);
+      setInterval(fetchStatus, 3000);
+      tickClock();
+      fetchStatus();
+    </script>
+  </body>
+</html>
