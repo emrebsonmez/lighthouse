@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lighthouse — Live rate trace</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/lighthouse.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <div class="brandrow">
+          <img class="mark" src="/lighthouse-mark.svg" width="30" height="30" alt="" />
+          <div>
+            <div class="wordmark">lighthouse</div>
+            <div class="subtitle">Live rate trace</div>
+          </div>
+        </div>
+        <button type="button" class="btn ghost sm" disabled tabindex="-1" aria-disabled="true">Subscribe (coming soon)</button>
+      </div>
+
+      <div id="error" class="error-banner" hidden></div>
+
+      <section class="alert pricing-hero neutral" id="pricingHero">
+        <div class="lbl">Rate alert</div>
+        <p class="msg pricing-headline" id="pricingHeadline">Loading…</p>
+      </section>
+
+      <div class="controls controls-row">
+        <div class="seg interval-toggle" id="intervalToggle" role="group" aria-label="Poll interval"></div>
+        <div class="clock compact-meta">
+          <span class="t clock-inline" id="clock">—:—</span>
+          <span class="meta">
+            <span id="tzShort" class="muted"></span>
+            &nbsp; Next <b class="countdown-inline" id="countdown">—</b>
+          </span>
+        </div>
+      </div>
+
+      <div class="status live-strip watching" id="liveStrip">
+        <span class="dot"></span>
+        <span id="liveText">Connecting…</span>
+        <span id="liveStep" class="live-step" hidden></span>
+      </div>
+
+      <div class="stayrow">
+        <label class="stay" for="stayDateInput">Stay date:</label>
+        <input type="date" id="stayDateInput" class="stay-date-input" disabled />
+        <button type="button" class="btn ghost sm" id="pollBtn">&#8635;&nbsp; Run check now</button>
+      </div>
+
+      <table class="trace-table">
+        <thead>
+          <tr>
+            <th>Checked</th>
+            <th>Day</th>
+            <th id="homeCol">Home</th>
+            <th id="compCol">Competitor</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr>
+            <td colspan="5" class="muted">No runs yet — try “Run check now”</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      const pricingHero = document.getElementById("pricingHero");
+      const pricingHeadline = document.getElementById("pricingHeadline");
+      const intervalToggle = document.getElementById("intervalToggle");
+      const clockEl = document.getElementById("clock");
+      const tzShortEl = document.getElementById("tzShort");
+      const countdownEl = document.getElementById("countdown");
+      const liveStrip = document.getElementById("liveStrip");
+      const liveText = document.getElementById("liveText");
+      const liveStep = document.getElementById("liveStep");
+      const historyBody = document.getElementById("historyBody");
+      const errorEl = document.getElementById("error");
+      const pollBtn = document.getElementById("pollBtn");
+      const stayDateInput = document.getElementById("stayDateInput");
+      const homeCol = document.getElementById("homeCol");
+      const compCol = document.getElementById("compCol");
+
+      let state = null;
+      let clockOffsetMs = 0;
+      let orgTimezone = "America/New_York";
+      let lastTopRunId = null;
+      let nextPollAtMs = null;
+      let intervalChanging = false;
+      let stayDateChanging = false;
+      const expandedRuns = new Set();
+      const runDetailCache = new Map();
+      const activePropTab = new Map();
+
+      function formatClock(date) {
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+          timeZone: orgTimezone,
+        });
+      }
+
+      function tickClock() {
+        const now = new Date(Date.now() + clockOffsetMs);
+        clockEl.textContent = formatClock(now);
+      }
+
+      function formatCountdown(seconds) {
+        if (seconds == null) return "—";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) {
+          return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        }
+        return `${m}:${String(s).padStart(2, "0")}`;
+      }
+
+      function tickCountdown() {
+        if (!nextPollAtMs) {
+          countdownEl.textContent = "—";
+          return;
+        }
+        const sec = Math.max(0, Math.floor((nextPollAtMs - Date.now()) / 1000));
+        countdownEl.textContent = formatCountdown(sec);
+      }
+
+      const STEP_LABELS = {
+        starting: "Setup",
+        checking_property: "Fetch",
+        comparing: "Compare",
+        alerts: "Alerts",
+      };
+
+      function activeRunMessage(data) {
+        if (!data.activeRun) return null;
+        return data.activeRun.progressMessage || data.hero?.headline || "Checking rates…";
+      }
+
+      function renderActiveRunStep(data) {
+        const step = data.activeRun?.progressStep;
+        if (!step || !STEP_LABELS[step]) {
+          liveStep.hidden = true;
+          liveStep.textContent = "";
+          return;
+        }
+        liveStep.hidden = false;
+        liveStep.textContent = STEP_LABELS[step];
+      }
+
+      function fmtPrice(v) {
+        if (v == null) return "—";
+        return "$" + v;
+      }
+
+      function renderHero(hero) {
+        if (!hero) return;
+        pricingHeadline.textContent = hero.headline;
+        pricingHero.className = "alert pricing-hero " + (hero.tone || "neutral");
+      }
+
+      function renderIntervalToggle(data) {
+        const intervals = data.pollIntervals || [5, 10, 30, 60];
+        const current = data.org.pollEveryMinutes;
+        const disabled = !!data.activeRun || intervalChanging;
+        intervalToggle.innerHTML = intervals
+          .map(
+            (m) =>
+              `<button type="button" data-minutes="${m}" class="${m === current ? "active" : ""}" ${disabled ? "disabled" : ""}>${m}m</button>`,
+          )
+          .join("");
+      }
+
+      async function setPollInterval(minutes) {
+        if (!state || intervalChanging) return;
+        intervalChanging = true;
+        renderIntervalToggle(state);
+        try {
+          const res = await fetch("/api/debug/poll-interval", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pollEveryMinutes: minutes }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.hidden = false;
+            errorEl.textContent = "Could not update poll interval";
+            return;
+          }
+          if (data.nextPollAt) {
+            nextPollAtMs = new Date(data.nextPollAt).getTime();
+          }
+          await fetchStatus();
+        } catch {
+          errorEl.hidden = false;
+          errorEl.textContent = "Could not update poll interval";
+        } finally {
+          intervalChanging = false;
+        }
+      }
+
+      async function setStayDate(stayDate) {
+        if (!state || stayDateChanging) return;
+        if (stayDate === state.stayDate) return;
+        stayDateChanging = true;
+        stayDateInput.disabled = true;
+        try {
+          const res = await fetch("/api/debug/stay-date", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ stayDate }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.hidden = false;
+            errorEl.textContent = "Could not update stay date";
+            stayDateInput.value = state.stayDate;
+            return;
+          }
+          await fetchStatus();
+        } catch {
+          errorEl.hidden = false;
+          errorEl.textContent = "Could not update stay date";
+          if (state) stayDateInput.value = state.stayDate;
+        } finally {
+          stayDateChanging = false;
+          if (state && !state.activeRun) stayDateInput.disabled = false;
+        }
+      }
+
+      stayDateInput.addEventListener("change", () => {
+        if (!stayDateInput.value) return;
+        setStayDate(stayDateInput.value);
+      });
+
+      intervalToggle.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-minutes]");
+        if (!btn || btn.disabled) return;
+        const minutes = Number(btn.dataset.minutes);
+        if (state && minutes === state.org.pollEveryMinutes) return;
+        setPollInterval(minutes);
+      });
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderSnapshotPanel(runId, detail) {
+        const snapshots = detail?.snapshots || [];
+        if (snapshots.length === 0) {
+          return '<div class="detail-panel muted">No snapshot data for this run.</div>';
+        }
+
+        let tabKey = activePropTab.get(runId);
+        if (!tabKey) {
+          tabKey = snapshots[0].propertyId;
+          activePropTab.set(runId, tabKey);
+        }
+
+        const tabs = snapshots
+          .map((s, idx) => {
+            const label =
+              state && idx === 0
+                ? state.properties.home
+                : state && idx === 1
+                  ? state.properties.competitor
+                  : s.propertyName;
+            const active = s.propertyId === tabKey ? "active" : "";
+            return `<button type="button" class="${active}" data-run="${runId}" data-prop="${s.propertyId}">${escapeHtml(label)}</button>`;
+          })
+          .join("");
+
+        const snap =
+          snapshots.find((s) => s.propertyId === tabKey) || snapshots[0];
+        const rooms = (snap.rates?.normalized || [])
+          .map(
+            (r) =>
+              `<li><span>${escapeHtml(r.room_name)}</span><span class="price rp">$${Number(r.price).toFixed(2)}</span></li>`,
+          )
+          .join("");
+
+        const rawJson = JSON.stringify(snap.rates?.raw ?? snap.rates, null, 2);
+
+        return `<div class="detail-panel" data-run-panel="${runId}">
+          <div class="prop-tabs tabs">${tabs}</div>
+          <ul class="room-list rooms">${rooms || '<li class="muted">No normalized rooms</li>'}</ul>
+          <button type="button" class="raw-toggle rawlink" data-run="${runId}">Toggle raw JSON</button>
+          <pre class="raw-json" id="raw-${runId}">${escapeHtml(rawJson)}</pre>
+        </div>`;
+      }
+
+      async function loadRunDetail(runId) {
+        if (runDetailCache.has(runId)) return runDetailCache.get(runId);
+        const res = await fetch(`/api/debug/runs/${runId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error("detail_failed");
+        runDetailCache.set(runId, data);
+        return data;
+      }
+
+      async function toggleRunExpand(runId) {
+        if (expandedRuns.has(runId)) {
+          expandedRuns.delete(runId);
+        } else {
+          expandedRuns.add(runId);
+          try {
+            await loadRunDetail(runId);
+          } catch {
+            errorEl.hidden = false;
+            errorEl.textContent = "Could not load run detail";
+            expandedRuns.delete(runId);
+            return;
+          }
+        }
+        if (state) renderHistory(state.history);
+      }
+
+      historyBody.addEventListener("click", (e) => {
+        const rawBtn = e.target.closest(".raw-toggle");
+        if (rawBtn) {
+          const pre = document.getElementById("raw-" + rawBtn.dataset.run);
+          if (pre) pre.classList.toggle("open");
+          return;
+        }
+        const tabBtn = e.target.closest(".prop-tabs button");
+        if (tabBtn) {
+          activePropTab.set(tabBtn.dataset.run, tabBtn.dataset.prop);
+          if (state) renderHistory(state.history);
+          return;
+        }
+        const row = e.target.closest("tr.trace-row");
+        if (row) toggleRunExpand(row.dataset.runId);
+      });
+
+      function renderHistory(history) {
+        if (!history || history.length === 0) {
+          historyBody.innerHTML =
+            '<tr><td colspan="5" class="muted">No runs yet — try “Run check now”</td></tr>';
+          return;
+        }
+
+        const topId = history[0]?.id;
+        const highlight = topId && topId !== lastTopRunId;
+        if (highlight) lastTopRunId = topId;
+
+        historyBody.innerHTML = history
+          .map((row, i) => {
+            const badgeClass = row.outcome || "error";
+            const expanded = expandedRuns.has(row.id);
+            const detail = runDetailCache.get(row.id);
+            const detailHtml = expanded
+              ? `<tr class="detail-row"><td colspan="5">${renderSnapshotPanel(row.id, detail)}</td></tr>`
+              : "";
+            const caret = expanded ? "▼" : "▶";
+            return `<tr class="trace-row ${highlight && i === 0 ? "highlight" : ""} ${expanded ? "expanded" : ""}" data-run-id="${row.id}">
+              <td class="trace-checked"><span class="chevron caret">${caret}</span>${escapeHtml(row.checkedAgo || "—")}</td>
+              <td class="trace-day">${escapeHtml(row.stayDateDisplay || "—")}</td>
+              <td class="price">${fmtPrice(row.homeCheapest)}</td>
+              <td class="price">${fmtPrice(row.competitorCheapest)}</td>
+              <td><span class="badge pill ${badgeClass}" title="${escapeHtml(row.outcomeSubtitle || "")}">${escapeHtml(row.outcomeLabel)}</span></td>
+            </tr>${detailHtml}`;
+          })
+          .join("");
+      }
+
+      function applyStatus(data) {
+        state = data;
+        errorEl.hidden = true;
+
+        orgTimezone = data.org.timezone;
+        clockOffsetMs = new Date(data.serverTime).getTime() - Date.now();
+        tzShortEl.textContent = data.org.timezone.replace(/_/g, " ");
+        stayDateInput.min = data.stayDateMin || "";
+        stayDateInput.value = data.stayDate || "";
+        stayDateInput.disabled = !data.canEditStayDate || !!data.activeRun || stayDateChanging;
+        homeCol.textContent = data.properties.home;
+        compCol.textContent = data.properties.competitor;
+
+        renderHero(data.hero);
+        renderIntervalToggle(data);
+
+        nextPollAtMs = data.nextPollAt ? new Date(data.nextPollAt).getTime() : null;
+        tickCountdown();
+
+        if (data.activeRun) {
+          liveStrip.className = "status live-strip checking shimmer";
+          liveText.textContent = activeRunMessage(data);
+          renderActiveRunStep(data);
+          pollBtn.disabled = true;
+        } else {
+          liveStrip.className = "status live-strip watching";
+          liveText.textContent = "watching · live trace";
+          liveStep.hidden = true;
+          pollBtn.disabled = false;
+        }
+
+        renderHistory(data.history);
+      }
+
+      async function fetchStatus() {
+        try {
+          const res = await fetch("/api/debug/status");
+          const data = await res.json();
+          if (!res.ok) {
+            errorEl.hidden = false;
+            errorEl.textContent = data.message || "Unable to load status";
+            liveText.textContent = "Offline";
+            return;
+          }
+          applyStatus(data);
+        } catch {
+          errorEl.hidden = false;
+          errorEl.textContent = "Cannot reach server. Is npm run dev running?";
+          liveText.textContent = "Offline";
+        }
+      }
+
+      pollBtn.addEventListener("click", async () => {
+        pollBtn.disabled = true;
+        try {
+          const res = await fetch("/api/debug/poll-now", { method: "POST" });
+          const data = await res.json();
+          if (!data.started) {
+            liveText.textContent = "Poll already running…";
+          }
+          await fetchStatus();
+        } catch {
+          errorEl.hidden = false;
+          errorEl.textContent = "Failed to start poll";
+        }
+      });
+
+      setInterval(tickClock, 1000);
+      setInterval(tickCountdown, 1000);
+      setInterval(fetchStatus, 3000);
+      tickClock();
+      fetchStatus();
+    </script>
+  </body>
+</html>

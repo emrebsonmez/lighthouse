@@ -30,7 +30,7 @@ async function applyMigration(id: string, sql: string): Promise<void> {
     await client.query("BEGIN");
     await client.query(sql);
     await client.query(
-      `INSERT INTO "_lighthouse_migrations" ("id") VALUES ($1)`,
+      `INSERT INTO "_lighthouse_migrations" ("id") VALUES ($1) ON CONFLICT DO NOTHING`,
       [id],
     );
     await client.query("COMMIT");
@@ -43,29 +43,48 @@ async function applyMigration(id: string, sql: string): Promise<void> {
   }
 }
 
-/** Dev DBs created before the journal existed already have schema applied. */
-async function backfillJournalFromExistingSchema(): Promise<void> {
+async function tableExists(tableName: string): Promise<boolean> {
   const { rows } = await pool.query<{ exists: boolean }>(
     `SELECT EXISTS (
       SELECT 1 FROM information_schema.tables
-      WHERE table_schema = 'public' AND table_name = 'organizations'
+      WHERE table_schema = 'public' AND table_name = $1
     ) AS exists`,
+    [tableName],
   );
-  if (!rows[0]?.exists) return;
+  return rows[0]?.exists ?? false;
+}
 
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
+/** Only backfill the initial migration when schema predates the journal. */
+async function backfillJournalFromExistingSchema(): Promise<void> {
+  if (!(await tableExists("organizations"))) return;
+  if (await isApplied("0000_initial")) return;
+  if (await tableExists("poll_runs")) return;
 
-  for (const file of files) {
-    const id = file.replace(/\.sql$/, "");
-    if (await isApplied(id)) continue;
-    await pool.query(
-      `INSERT INTO "_lighthouse_migrations" ("id") VALUES ($1) ON CONFLICT DO NOTHING`,
-      [id],
-    );
-    logger.info({ migration: id }, "migration_backfilled");
+  await pool.query(
+    `INSERT INTO "_lighthouse_migrations" ("id") VALUES ($1) ON CONFLICT DO NOTHING`,
+    ["0000_initial"],
+  );
+  logger.info({ migration: "0000_initial" }, "migration_backfilled");
+}
+
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  const { rows } = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+    ) AS exists`,
+    [tableName, columnName],
+  );
+  return rows[0]?.exists ?? false;
+}
+
+async function migrationSchemaPresent(id: string): Promise<boolean> {
+  if (id === "0000_initial") return tableExists("organizations");
+  if (id === "0001_poll_runs") return tableExists("poll_runs");
+  if (id === "0002_stay_date_override") {
+    return columnExists("organizations", "stay_date_override");
   }
+  return true;
 }
 
 async function migrate() {
@@ -78,7 +97,7 @@ async function migrate() {
 
   for (const file of files) {
     const id = file.replace(/\.sql$/, "");
-    if (await isApplied(id)) {
+    if ((await isApplied(id)) && (await migrationSchemaPresent(id))) {
       logger.info({ migration: id }, "migration_skipped");
       continue;
     }

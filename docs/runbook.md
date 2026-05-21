@@ -49,6 +49,19 @@ npm run dev
 
 Or follow the manual steps in [README.md](../README.md).
 
+## Live debugger (`/debug.html`)
+
+Public status page for local/staging visibility without SMS:
+
+- `GET /api/debug/status` — pricing hero, poll interval, clock, next poll countdown, active run, last 50 completed runs (trace timestamps include date: `MMM d, yyyy · h:mm:ss a`)
+- `PATCH /api/debug/poll-interval` — body `{ "pollEveryMinutes": 5 | 10 | 30 | 60 }`; updates the org schedule via pg-boss
+- `GET /api/debug/runs/:runId` — run metadata plus per-property rate snapshots (normalized rooms + raw JSON); older runs without stored `detail.snapshots` are filled from `rate_snapshots` in the run time window
+- `POST /api/debug/poll-now` — trigger one poll in the background
+
+**UI:** Bold hero compares home vs competitor with $ delta; segmented interval toggle (disabled while a check is running); expandable trace rows with home/competitor JSON tabs.
+
+To restrict access later, add a `DEBUG_TOKEN` env check on these routes (not implemented in v1).
+
 ## Webhooks (Twilio Console)
 
 - **Inbound SMS:** `POST {APP_BASE_URL}/webhooks/twilio/sms`

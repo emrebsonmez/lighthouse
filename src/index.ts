@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.js";
 import { twilioWebhookRouter } from "./routes/webhooks/twilio.js";
 import { subscribeRouter } from "./routes/subscribe.js";
+import { debugRouter } from "./routes/debug.js";
 import { logger } from "./lib/logger.js";
 import { startBoss } from "./jobs/boss.js";
 
@@ -22,12 +23,19 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   pinoHttp({
     logger,
+    autoLogging: {
+      ignore: (req) => {
+        const path = req.url?.split("?")[0];
+        return path === "/api/debug/status" || path === "/health";
+      },
+    },
   }),
 );
 
 app.use(healthRouter);
 app.use("/webhooks/twilio", twilioWebhookRouter);
 app.use("/api/subscribe", subscribeRouter);
+app.use("/api/debug", debugRouter);
 app.use(express.static(path.join(__dirname, "../public")));
 
 async function main() {

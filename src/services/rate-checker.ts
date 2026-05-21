@@ -3,12 +3,14 @@ import { runAdapter } from "../adapters/registry.js";
 import { db } from "../db/client.js";
 import {
   compSets,
+  organizations,
   properties,
   rateSnapshots,
   type Property,
 } from "../db/schema.js";
-import { stayWindowInTimezone } from "../lib/dates.js";
+import { getStayWindowForOrg } from "../lib/dates.js";
 import { logger } from "../lib/logger.js";
+import { POLL_STEPS, setPollProgress } from "./poll-progress.js";
 import * as Sentry from "@sentry/node";
 
 export async function getPropertiesForOrg(orgId: string): Promise<Property[]> {
@@ -31,10 +33,23 @@ export async function getPropertiesForOrg(orgId: string): Promise<Property[]> {
 }
 
 export async function runRateChecker(orgId: string): Promise<void> {
+  const [org] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) return;
+
   const props = await getPropertiesForOrg(orgId);
+  const { checkIn, checkOut, stayDate } = getStayWindowForOrg(org);
 
   for (const property of props) {
-    const { checkIn, checkOut, stayDate } = stayWindowInTimezone(property.timezone);
+    setPollProgress(
+      orgId,
+      `Checking ${property.name}…`,
+      POLL_STEPS.CHECKING_PROPERTY,
+    );
     const result = await runAdapter(property, checkIn, checkOut);
 
     if (result.status === "failed") {

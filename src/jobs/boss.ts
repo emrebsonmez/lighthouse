@@ -1,11 +1,16 @@
+import cronParser from "cron-parser";
 import PgBoss from "pg-boss";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { env } from "../config/env.js";
 import { db } from "../db/client.js";
-import { organizations } from "../db/schema.js";
+import { organizations, pollRuns } from "../db/schema.js";
 import { logger } from "../lib/logger.js";
 import { pollOrg } from "./poll-org.js";
 
 const JOB_NAME = "poll-org";
+
+/** Intervals offered on the public debug page (15 remains valid in DB/cron). */
+export const DEBUG_POLL_INTERVALS = [5, 10, 30, 60] as const;
 
 let boss: PgBoss | null = null;
 const registeredWorkers = new Set<string>();
@@ -88,6 +93,45 @@ export async function startBoss(): Promise<PgBoss> {
   const b = await getBoss();
   await rescheduleAllOrgs();
   return b;
+}
+
+export async function getNextPollAt(orgId: string): Promise<Date | null> {
+  const [org] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) return null;
+
+  try {
+    const b = await getBoss();
+    const schedules = await b.getSchedules();
+    const queueName = queueNameForOrg(orgId);
+    const sched = schedules.find((s) => s.name === queueName);
+    if (sched) {
+      const tz = sched.options?.tz ?? "UTC";
+      const interval = cronParser.parseExpression(sched.cron, { tz });
+      return interval.next().toDate();
+    }
+  } catch (err) {
+    logger.warn({ orgId, err }, "next_poll_schedule_parse_failed");
+  }
+
+  const [lastRun] = await db
+    .select()
+    .from(pollRuns)
+    .where(and(eq(pollRuns.orgId, orgId), isNotNull(pollRuns.completedAt)))
+    .orderBy(desc(pollRuns.completedAt))
+    .limit(1);
+
+  if (lastRun?.completedAt) {
+    return new Date(
+      lastRun.completedAt.getTime() + org.pollEveryMinutes * 60 * 1000,
+    );
+  }
+
+  return new Date();
 }
 
 /** Release connections so one-off scripts (seed, CLI) can exit. */

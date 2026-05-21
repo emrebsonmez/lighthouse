@@ -4,109 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lighthouse — SMS alerts</title>
-    <style>
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: system-ui, -apple-system, sans-serif;
-        background: #0f1115;
-        color: #e8eaed;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem 1.25rem;
-      }
-      main {
-        max-width: 480px;
-        width: 100%;
-      }
-      h1 { font-size: 1.75rem; font-weight: 600; margin: 0 0 0.5rem; }
-      .lead { color: #9aa0a6; margin: 0 0 1.5rem; line-height: 1.5; font-size: 0.95rem; }
-      label.field-label {
-        display: block;
-        font-size: 0.875rem;
-        margin-bottom: 0.5rem;
-        color: #e8eaed;
-        font-weight: 500;
-      }
-      input[type="tel"],
-      input[type="text"] {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border: 1px solid #3c4043;
-        border-radius: 8px;
-        background: #1a1d23;
-        color: #e8eaed;
-        font-size: 1rem;
-        margin-bottom: 1rem;
-      }
-      .consent-block {
-        background: #1a1d23;
-        border: 1px solid #3c4043;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-      }
-      .consent-row {
-        display: flex;
-        gap: 0.75rem;
-        align-items: flex-start;
-      }
-      .consent-row input[type="checkbox"] {
-        margin-top: 0.25rem;
-        width: 1.125rem;
-        height: 1.125rem;
-        flex-shrink: 0;
-        accent-color: #5b8def;
-      }
-      .consent-row label {
-        font-size: 0.875rem;
-        line-height: 1.5;
-        color: #e8eaed;
-        cursor: pointer;
-      }
-      .fine-print {
-        font-size: 0.8125rem;
-        color: #9aa0a6;
-        line-height: 1.55;
-        margin: 0 0 0.75rem;
-      }
-      .fine-print:last-child { margin-bottom: 0; }
-      .fine-print a { color: #8ab4f8; }
-      button.primary {
-        width: 100%;
-        padding: 0.875rem;
-        border: none;
-        border-radius: 8px;
-        background: #e8eaed;
-        color: #0f1115;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
-      button.secondary {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid #3c4043;
-        border-radius: 8px;
-        background: transparent;
-        color: #e8eaed;
-        font-size: 0.9375rem;
-        cursor: pointer;
-        margin-top: 0.5rem;
-      }
-      .hidden { display: none; }
-      .msg { margin-top: 1rem; font-size: 0.875rem; line-height: 1.4; }
-      .err { color: #f28b82; }
-      .ok { color: #81c995; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/lighthouse.css" />
   </head>
   <body>
-    <main>
-      <h1>Lighthouse text alerts</h1>
-      <p class="lead">
+    <div class="subscribe-wrap">
+      <div class="head">
+        <img class="mark" src="/lighthouse-mark.svg" width="30" height="30" alt="" />
+        <div>
+          <div class="wordmark">lighthouse</div>
+          <div class="subtitle">SMS rate alerts</div>
+        </div>
+      </div>
+
+      <h1 class="subscribe-title">Text alerts</h1>
+      <p class="subscribe-lead">
         Sign up for automated SMS alerts when a competitor’s same-day room rate is lower than yours.
       </p>
 
@@ -154,7 +71,9 @@
             <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
           </p>
 
-          <button type="submit" class="primary" id="btn-signup">Yes, sign me up!</button>
+          <div class="subscribe-actions">
+            <button type="submit" class="btn primary" id="btn-signup">Yes, sign me up!</button>
+          </div>
         </div>
 
         <div id="step-code" class="hidden">
@@ -167,13 +86,15 @@
             placeholder="123456"
             maxlength="8"
           />
-          <button type="button" class="primary" id="btn-verify">Complete signup</button>
-          <button type="button" class="secondary" id="btn-back">Back</button>
+          <div class="subscribe-actions">
+            <button type="button" class="btn primary" id="btn-verify">Complete signup</button>
+            <button type="button" class="btn ghost" id="btn-back">Back</button>
+          </div>
         </div>
       </form>
 
-      <p id="message" class="msg" role="status"></p>
-    </main>
+      <p id="message" class="form-msg" role="status"></p>
+    </div>
     <script>
       const phoneEl = document.getElementById("phone");
       const consentEl = document.getElementById("consent");
@@ -185,7 +106,7 @@
 
       function showMsg(text, ok) {
         msgEl.textContent = text;
-        msgEl.className = "msg " + (ok ? "ok" : "err");
+        msgEl.className = "form-msg " + (ok ? "ok" : "err");
       }
 
       function requireConsent() {
