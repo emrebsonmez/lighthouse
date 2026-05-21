@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lighthouse — SMS alerts</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #0f1115;
+        color: #e8eaed;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.25rem;
+      }
+      main {
+        max-width: 480px;
+        width: 100%;
+      }
+      h1 { font-size: 1.75rem; font-weight: 600; margin: 0 0 0.5rem; }
+      .lead { color: #9aa0a6; margin: 0 0 1.5rem; line-height: 1.5; font-size: 0.95rem; }
+      label.field-label {
+        display: block;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+        color: #e8eaed;
+        font-weight: 500;
+      }
+      input[type="tel"],
+      input[type="text"] {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid #3c4043;
+        border-radius: 8px;
+        background: #1a1d23;
+        color: #e8eaed;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+      }
+      .consent-block {
+        background: #1a1d23;
+        border: 1px solid #3c4043;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      .consent-row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+      }
+      .consent-row input[type="checkbox"] {
+        margin-top: 0.25rem;
+        width: 1.125rem;
+        height: 1.125rem;
+        flex-shrink: 0;
+        accent-color: #5b8def;
+      }
+      .consent-row label {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #e8eaed;
+        cursor: pointer;
+      }
+      .fine-print {
+        font-size: 0.8125rem;
+        color: #9aa0a6;
+        line-height: 1.55;
+        margin: 0 0 0.75rem;
+      }
+      .fine-print:last-child { margin-bottom: 0; }
+      .fine-print a { color: #8ab4f8; }
+      button.primary {
+        width: 100%;
+        padding: 0.875rem;
+        border: none;
+        border-radius: 8px;
+        background: #e8eaed;
+        color: #0f1115;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.secondary {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #3c4043;
+        border-radius: 8px;
+        background: transparent;
+        color: #e8eaed;
+        font-size: 0.9375rem;
+        cursor: pointer;
+        margin-top: 0.5rem;
+      }
+      .hidden { display: none; }
+      .msg { margin-top: 1rem; font-size: 0.875rem; line-height: 1.4; }
+      .err { color: #f28b82; }
+      .ok { color: #81c995; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lighthouse text alerts</h1>
+      <p class="lead">
+        Sign up for automated SMS alerts when a competitor’s same-day room rate is lower than yours.
+      </p>
+
+      <form id="form-opt-in" novalidate>
+        <div id="step-opt-in">
+          <label class="field-label" for="phone">Mobile phone number *</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            required
+            autocomplete="tel"
+            placeholder="(555) 123-4567"
+          />
+
+          <div class="consent-block">
+            <div class="consent-row">
+              <input id="consent" name="consent" type="checkbox" value="yes" />
+              <label for="consent">
+                Yes, I would like to receive automated text messages from Lighthouse about
+                same-day competitive hotel pricing alerts and related service updates for properties
+                I am authorized to manage.
+              </label>
+            </div>
+          </div>
+
+          <p class="fine-print">
+            <strong>Message frequency:</strong> Frequency varies with market activity. During peak
+            season you may receive several alerts per day when competitive pricing changes; most
+            days you will receive few or no messages.
+          </p>
+          <p class="fine-print">
+            <strong>Message and data rates:</strong> Message and data rates may apply depending on
+            your mobile carrier plan.
+          </p>
+          <p class="fine-print">
+            <strong>Help &amp; stop:</strong> Reply <strong>HELP</strong> for help or
+            <strong>STOP</strong> to cancel at any time. By providing your phone number and checking
+            the box above, you agree to receive text messages from Lighthouse. Consent is not required
+            to make a purchase.
+          </p>
+          <p class="fine-print">
+            <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>
+            &nbsp;|&nbsp;
+            <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+          </p>
+
+          <button type="submit" class="primary" id="btn-signup">Yes, sign me up!</button>
+        </div>
+
+        <div id="step-code" class="hidden">
+          <label class="field-label" for="code">Verification code *</label>
+          <input
+            id="code"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="123456"
+            maxlength="8"
+          />
+          <button type="button" class="primary" id="btn-verify">Complete signup</button>
+          <button type="button" class="secondary" id="btn-back">Back</button>
+        </div>
+      </form>
+
+      <p id="message" class="msg" role="status"></p>
+    </main>
+    <script>
+      const phoneEl = document.getElementById("phone");
+      const consentEl = document.getElementById("consent");
+      const codeEl = document.getElementById("code");
+      const msgEl = document.getElementById("message");
+      const stepOptIn = document.getElementById("step-opt-in");
+      const stepCode = document.getElementById("step-code");
+      const form = document.getElementById("form-opt-in");
+
+      function showMsg(text, ok) {
+        msgEl.textContent = text;
+        msgEl.className = "msg " + (ok ? "ok" : "err");
+      }
+
+      function requireConsent() {
+        if (!consentEl.checked) {
+          showMsg("Please check the box to agree to receive text messages.", false);
+          return false;
+        }
+        return true;
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (stepCode.classList.contains("hidden")) {
+          if (!requireConsent()) return;
+          const phone = phoneEl.value.trim();
+          if (!phone) return showMsg("Enter your mobile phone number.", false);
+          try {
+            const res = await fetch("/api/subscribe/start-verification", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ phone, consent: true }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Could not send verification code");
+            stepOptIn.classList.add("hidden");
+            stepCode.classList.remove("hidden");
+            showMsg(
+              data.dev
+                ? "Dev mode: enter any code, then tap Complete signup."
+                : "Verification code sent. Enter it below.",
+              true,
+            );
+          } catch (err) {
+            showMsg(err.message || "Could not send verification code", false);
+          }
+        }
+      });
+
+      document.getElementById("btn-verify").onclick = async () => {
+        if (!requireConsent()) return;
+        const phone = phoneEl.value.trim();
+        const code = codeEl.value.trim();
+        if (!code) return showMsg("Enter the verification code.", false);
+        try {
+          const res = await fetch("/api/subscribe/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, code, consent: true }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Verification failed");
+          stepCode.classList.add("hidden");
+          showMsg(
+            data.subscribed
+              ? "You're subscribed. Alerts are sent during your configured hours when a competitor undercuts your rates."
+              : "We received your request. Our team will reach out shortly.",
+            true,
+          );
+        } catch (err) {
+          showMsg(err.message || "Verification failed", false);
+        }
+      };
+
+      document.getElementById("btn-back").onclick = () => {
+        stepCode.classList.add("hidden");
+        stepOptIn.classList.remove("hidden");
+        showMsg("", true);
+      };
+    </script>
+  </body>
+</html>

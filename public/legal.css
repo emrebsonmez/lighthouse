@@ -1,0 +1,135 @@
+:root {
+  --ink: #0f1115;
+  --muted: #5f6368;
+  --link: #1a73e8;
+  --rule: #e5e7eb;
+  --bg: #fafafa;
+  --card: #ffffff;
+  --warn-bg: #fff7e6;
+  --warn-border: #f5c879;
+  --warn-ink: #6b4500;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.65;
+}
+
+.container {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+
+header.legal-header {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+header.legal-header .brand {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+header.legal-header h1 {
+  font-size: 2rem;
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+header.legal-header .effective {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.boilerplate-notice {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-ink);
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin: 0 0 2rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: 2.25rem 0 0.5rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.0625rem;
+  margin: 1.5rem 0 0.5rem;
+  font-weight: 600;
+}
+
+p, li {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+ul, ol {
+  padding-left: 1.5rem;
+}
+
+li {
+  margin-bottom: 0.35rem;
+}
+
+a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.callout {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink);
+  padding: 1rem 1.25rem;
+  border-radius: 6px;
+  margin: 1.25rem 0;
+}
+
+.callout strong { font-weight: 600; }
+
+.toc {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.toc li {
+  margin-bottom: 0.25rem;
+  font-size: 0.9375rem;
+}
+
+footer.legal-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+footer.legal-footer a { color: var(--muted); }
