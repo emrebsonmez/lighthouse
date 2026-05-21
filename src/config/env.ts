@@ -50,6 +50,16 @@ export function useTwilioTestCredentials(): boolean {
   return Boolean(env.TWILIO_TEST_ACCOUNT_SID && env.TWILIO_TEST_AUTH_TOKEN);
 }
 
+export function hasTwilioCredentials(): boolean {
+  if (useTwilioTestCredentials()) return true;
+  const hasAccount = Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_PHONE_NUMBER);
+  const hasAuth = Boolean(
+    (env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET) ||
+      env.TWILIO_AUTH_TOKEN,
+  );
+  return hasAccount && hasAuth;
+}
+
 export function requireTwilio(): TwilioCredentials {
   const testMode = useTwilioTestCredentials();
 

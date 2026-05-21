@@ -44,6 +44,7 @@ export const organizations = pgTable("organizations", {
   maxStalenessSeconds: integer("max_staleness_seconds").notNull().default(7200),
   notifyCooldownMinutes: integer("notify_cooldown_minutes").notNull().default(30),
   timezone: text("timezone").notNull().default("America/New_York"),
+  stayDateOverride: text("stay_date_override"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
